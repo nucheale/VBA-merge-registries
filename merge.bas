@@ -24,7 +24,7 @@ Function twoDimArrayToOneDim(oldArr)
 End Function
 
 
-Sub merge_files()
+Sub merge_files_step_1()
 
     Set macroWb = ThisWorkbook
     Set newWs = macroWb.Sheets.Add(After:=macroWb.Sheets(macroWb.Sheets.Count))
@@ -40,7 +40,7 @@ Sub merge_files()
         .DisplayAlerts = False
     End With
 
-    ts_titles = Array("ТС", "ТС ", "Автомобиль", "Госномер ТС", "ГОС НОМЕР", "Гос.номер а/м", "Номеравто")
+    ts_titles = Array("ТС", "ТС ", "Автомобиль", "Госномер ТС", "ГОС НОМЕР", "Гос.номер а/м", "Номеравто", "Гос. номер")
 
     fileIndex = 1
     For Each file In filesToOpen
@@ -53,8 +53,6 @@ Sub merge_files()
                 If Not findTS Is Nothing Then Exit For
             Next e
 
-            ' debug.print objectWb.name, findDate, findTS
-
             lastRowObj = .Cells(Rows.Count, 1).End(xlUp).Row
 
             dates = .Range(.Cells(2, findDate.Column), .Cells(lastRowObj, findDate.Column))
@@ -63,10 +61,24 @@ Sub merge_files()
             ts = twoDimArrayToOneDim(ts)
             Dim fileName() As String
             ReDim fileName(1 To UBound(dates))
-            For i = LBound(fileName) To UBound(fileName)
+
+            ' https://regex101.com/r/MWdHhN/1
+
+            Set regEx = CreateObject("VBScript.RegExp")
+            regEx.Pattern = "\([^)]*\)"
+            For i = LBound(dates) To UBound(dates)
+                If IsDate(dates(i)) Then
+                    If VarType(dates(i)) = vbDate Then
+                        dates(i) = CLng(dates(i))
+                    ElseIf VarType(dates(i)) = vbString Then
+                        dates(i) = CLng(CDate(dates(i)))
+                    End If
+                End If
                 fileName(i) = objectWb.Name
+                ts(i) = Replace(ts(i), " ", "")
+                ts(i) = Replace(ts(i), ".", "")
+                ts(i) = regEx.Replace(ts(i), "")
             Next i
-            ' Debug.Print objectWb.Name, " // ", UBound(dates), UBound(ts)
         End With
         
         With newWs
@@ -75,6 +87,8 @@ Sub merge_files()
             .Cells(1, 3) = "Госномер"
             .Cells(1, 4) = "Плечо"
             .Cells(1, 5) = "Файл"
+            .Cells(1, 6) = "Дубликаты"
+            .Cells(1, 7) = "Перевозчик"
             lastRowNewWs = .Cells(Rows.Count, 1).End(xlUp).Row
             .Cells(lastRowNewWs + 1, 1).Resize(UBound(dates), 1).Value = Application.Transpose(dates)
             .Cells(lastRowNewWs + 1, 2).Resize(UBound(ts), 1).Value = Application.Transpose(ts)
@@ -97,3 +111,96 @@ Sub merge_files()
     End With
 
 End Sub
+
+
+Sub merge_files_step_2()
+
+    With Application
+        .Calculation = xlCalculationManual
+        .AskToUpdateLinks = False
+        .DisplayAlerts = False
+    End With
+
+    Set macroWb = ThisWorkbook
+
+    Set dictWb = Application.Workbooks.Open(fileName:=macroWb.Path & "\Сводная по транспортным средствам.xlsx")
+
+    With dictWb.Sheets(1)
+        If InStr(.Cells(2, 1), "Сводная по транспортным средствам") > 0 Then
+            For i = 3 To 1 Step -1
+                .Rows(i).Delete
+            Next i
+        End If
+        lastRowDict = .Cells(Rows.Count, 3).End(xlUp).Row
+        tsDict = .Range(.Cells(2, 3), .Cells(lastRowDict, 3))
+        carriersDict = .Range(.Cells(2, 2), .Cells(lastRowDict, 2))
+        tsDict = twoDimArrayToOneDim(tsDict)
+        carriersDict = twoDimArrayToOneDim(carriersDict)
+        For i = LBound(tsDict) To UBound(tsDict)
+            tsDict(i) = Replace(tsDict(i), " ", "")
+        Next i
+        .Cells(2, 3).Resize(UBound(tsDict), 1).Value = Application.Transpose(tsDict)
+    End With
+
+    With macroWb.Sheets(macroWb.Sheets.Count)
+        lastRowNewWs = .Cells(Rows.Count, 1).End(xlUp).Row
+        lastColumnNewWs = .Cells(1, Columns.Count).End(xlToLeft).Column
+                            
+        dates = .Range(.Cells(2, 1), .Cells(lastRowNewWs, 1))
+        ts = .Range(.Cells(2, 3), .Cells(lastRowNewWs, 3))
+        dates = twoDimArrayToOneDim(dates)
+        ts = twoDimArrayToOneDim(ts)
+
+        Dim forDublicates() As String
+        ReDim forDublicates(1 To UBound(dates))
+        
+        
+        For i = LBound(dates) To UBound(dates)
+            forDublicates(i) = dates(i) & ts(i)
+        Next i
+        
+        .Range(.Cells(2, 1), .Cells(lastRowNewWs, 1)).ClearContents
+        .Cells(2, 1).Resize(UBound(dates), 1).Value = Application.Transpose(dates)
+        .Cells(2, 6).Resize(UBound(forDublicates), 1).Value = Application.Transpose(forDublicates)
+
+        .Range(.Cells(1, 1), .Cells(lastRowNewWs, lastColumnNewWs)).RemoveDuplicates Columns:=6, Header:=xlYes
+
+        Erase dates
+        Erase ts
+        lastRowNewWs = .Cells(Rows.Count, 1).End(xlUp).Row
+        lastColumnNewWs = .Cells(1, Columns.Count).End(xlToLeft).Column
+        dates = .Range(.Cells(2, 1), .Cells(lastRowNewWs, 1))
+        ts = .Range(.Cells(2, 3), .Cells(lastRowNewWs, 3))
+        dates = twoDimArrayToOneDim(dates)
+        ts = twoDimArrayToOneDim(ts)
+        dim carriers() as Variant
+        redim carriers(1 to UBound(ts))
+        
+        for i = LBound(ts) to UBound(ts)
+            for e = LBound(tsDict) to UBound(tsDict)
+                if ts(i) = tsDict(e) then 
+                    carriers(i) = carriersDict(e)
+                    exit for
+                end if
+            next e
+        next i
+
+        .Cells(2, 7).Resize(UBound(carriers), 1).Value = Application.Transpose(carriers)
+
+    End With
+
+
+
+
+    dictWb.Close SaveChanges:=True
+
+    With Application
+        .Calculation = xlCalculationAutomatic
+        .AskToUpdateLinks = True
+        .DisplayAlerts = True
+    End With
+
+End Sub
+
+
+' это считается без полигонов
