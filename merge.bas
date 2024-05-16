@@ -26,6 +26,8 @@ End Function
 
 Sub merge_files_step_1()
 
+    'Загрузить файлы с реестрами объектов и одним реестром всех полигонов. файл с полигоном должен содержать слово полигон в названии
+
     Set macroWb = ThisWorkbook
     Set newWs = macroWb.Sheets.Add(After:=macroWb.Sheets(macroWb.Sheets.Count))
     currTime = Array(Hour(Now), Minute(Now), Second(Now))
@@ -40,11 +42,12 @@ Sub merge_files_step_1()
         .DisplayAlerts = False
     End With
 
-    ts_titles = Array("ТС", "ТС ", "Автомобиль", "Госномер ТС", "ГОС НОМЕР", "Гос.номер а/м", "Номеравто", "Гос. номер")
+    ts_titles = Array("ТС", "ТС ", "Автомобиль", "Госномер ТС", "ГОС НОМЕР", "Гос.номер а/м", "Номеравто", "Гос. номер", "Госномер")
 
     fileIndex = 1
     For Each file In filesToOpen
         Set objectWb = Application.Workbooks.Open(fileName:=filesToOpen(fileIndex))
+        If objectWb.Sheets.Count = 1 Then objectWb.Sheets(objectWb.Sheets.Count).Name = "Ввоз"
         With Sheets("Ввоз")
             If .AutoFilterMode Then .AutoFilter.ShowAllData
             Set findDate = .Range(.Cells(1, 1), .Cells(1, 20)).Find("Дата")
@@ -52,6 +55,8 @@ Sub merge_files_step_1()
                 Set findTS = .Range(.Cells(1, 1), .Cells(1, 20)).Find(e)
                 If Not findTS Is Nothing Then Exit For
             Next e
+
+
 
             lastRowObj = .Cells(Rows.Count, 1).End(xlUp).Row
 
@@ -61,6 +66,18 @@ Sub merge_files_step_1()
             ts = twoDimArrayToOneDim(ts)
             Dim fileName() As String
             ReDim fileName(1 To UBound(dates))
+
+            Dim steps As Variant 'плечо
+            If InStr(LCase(objectWb.Name), "полигон") Then
+                Set findStep = .Range(.Cells(1, 1), .Cells(1, 20)).Find(what:="Плечо", LookIn:=xlValues, lookAt:=xlWhole)
+                steps = .Range(.Cells(2, findStep.Column), .Cells(lastRowObj, findStep.Column))
+                steps = twoDimArrayToOneDim(steps)
+            Else
+                ReDim steps(1 To UBound(dates))
+                For i = LBound(steps) To UBound(steps)
+                    steps(i) = 1
+                Next i
+            End If
 
             ' https://regex101.com/r/MWdHhN/1
 
@@ -92,7 +109,7 @@ Sub merge_files_step_1()
             lastRowNewWs = .Cells(Rows.Count, 1).End(xlUp).Row
             .Cells(lastRowNewWs + 1, 1).Resize(UBound(dates), 1).Value = Application.Transpose(dates)
             .Cells(lastRowNewWs + 1, 2).Resize(UBound(ts), 1).Value = Application.Transpose(ts)
-            .Cells(lastRowNewWs + 1, 4).Resize(UBound(fileName), 1).Value = 1
+            .Cells(lastRowNewWs + 1, 4).Resize(UBound(steps), 1).Value = Application.Transpose(steps)
             .Cells(lastRowNewWs + 1, 5).Resize(UBound(fileName), 1).Value = Application.Transpose(fileName)
         End With
 
@@ -173,24 +190,21 @@ Sub merge_files_step_2()
         ts = .Range(.Cells(2, 3), .Cells(lastRowNewWs, 3))
         dates = twoDimArrayToOneDim(dates)
         ts = twoDimArrayToOneDim(ts)
-        dim carriers() as Variant
-        redim carriers(1 to UBound(ts))
+        Dim carriers() As Variant
+        ReDim carriers(1 To UBound(ts))
         
-        for i = LBound(ts) to UBound(ts)
-            for e = LBound(tsDict) to UBound(tsDict)
-                if ts(i) = tsDict(e) then 
+        For i = LBound(ts) To UBound(ts)
+            For e = LBound(tsDict) To UBound(tsDict)
+                If ts(i) = tsDict(e) Then
                     carriers(i) = carriersDict(e)
-                    exit for
-                end if
-            next e
-        next i
+                    Exit For
+                End If
+            Next e
+        Next i
 
         .Cells(2, 7).Resize(UBound(carriers), 1).Value = Application.Transpose(carriers)
 
     End With
-
-
-
 
     dictWb.Close SaveChanges:=True
 
@@ -203,4 +217,4 @@ Sub merge_files_step_2()
 End Sub
 
 
-' это считается без полигонов
+'дальше разделение на листы
