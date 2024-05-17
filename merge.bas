@@ -23,46 +23,47 @@ Function twoDimArrayToOneDim(oldArr)
     twoDimArrayToOneDim = newArr
 End Function
 
-Private Sub createReport(wb, sheetName, data, reportMonth, lastDayOfMonth) 'создание листа с отчетом
-        Set sheetName = wb.Sheets.Add(After:=wb.Sheets(wb.Sheets.Count))
-        With sheetName
-            .Cells(1, 1) = "Дата"
-            .Cells(1, 2) = "0"
-            .Cells(1, 3) = "1"
-            .Cells(1, 4) = "2"
-            .Cells(1, 5) = "0 и 1"
-            ' .cells(1, 7) = "Среднее количество за апрель:"
-            For i = 2 To lastDayOfMonth + 1
-                count0 = 0
-                count1 = 0
-                count2 = 0
-                For e = LBound(data) To UBound(data)
-                    If data(e, 1) = "" Then Exit For
-                    .Cells(i, 1) = DateSerial(Year(Date), reportMonth, i - 1)
-                    If data(e, 1) = .Cells(i, 1) Then
-                        Select Case True
-                            Case data(e, 4) = 0
-                                count0 = count0 + 1
-                            Case data(e, 4) = 1
-                                count1 = count1 + 1
-                            Case data(e, 4) = 2
-                                count2 = count2 + 1
-                        End Select
-                    End If
-                Next e
-                .Cells(i, 2) = count0
-                .Cells(i, 3) = count1
-                .Cells(i, 4) = count2
-                .Cells(i, 5) = count0 + count1
-            Next i
-            .Cells(lastDayOfMonth + 2, 1) = "Среднее"
-            .Cells(lastDayOfMonth + 3, 1) = "Максимальное"
-            For j = 2 To 5
-                .Cells(lastDayOfMonth + 2, j) = Round(Application.WorksheetFunction.Average(.Range(.Cells(2, j), .Cells(lastDayOfMonth + 1, j))), 0)
-                .Cells(lastDayOfMonth + 3, j) = Round(Application.WorksheetFunction.Max(.Range(.Cells(2, j), .Cells(lastDayOfMonth + 1, j))), 0)
-            Next j
-        End With
-    End Sub
+Private Sub createReport(wb, sheet, sheetName, data, reportMonth, lastDayOfMonth) 'создание листа с отчетом
+    Set sheet = wb.Sheets.Add(After:=wb.Sheets(wb.Sheets.Count))
+    sheet.Name = sheetName
+    With sheet
+        .Cells(1, 1) = "Дата"
+        .Cells(1, 2) = "0"
+        .Cells(1, 3) = "1"
+        .Cells(1, 4) = "2"
+        .Cells(1, 5) = "0 и 1"
+        ' .cells(1, 7) = "Среднее количество за апрель:"
+        For i = 2 To lastDayOfMonth + 1
+            count0 = 0
+            count1 = 0
+            count2 = 0
+            For e = LBound(data) To UBound(data)
+                If data(e, 1) = "" Then Exit For
+                .Cells(i, 1) = DateSerial(Year(Date), reportMonth, i - 1)
+                If data(e, 1) = .Cells(i, 1) Then
+                    Select Case True
+                        Case data(e, 4) = 0
+                            count0 = count0 + 1
+                        Case data(e, 4) = 1
+                            count1 = count1 + 1
+                        Case data(e, 4) = 2
+                            count2 = count2 + 1
+                    End Select
+                End If
+            Next e
+            .Cells(i, 2) = count0
+            .Cells(i, 3) = count1
+            .Cells(i, 4) = count2
+            .Cells(i, 5) = count0 + count1
+        Next i
+        .Cells(lastDayOfMonth + 2, 1) = "Среднее"
+        .Cells(lastDayOfMonth + 3, 1) = "Максимальное"
+        For j = 2 To 5
+            .Cells(lastDayOfMonth + 2, j) = Round(Application.WorksheetFunction.Average(.Range(.Cells(2, j), .Cells(lastDayOfMonth + 1, j))), 0)
+            .Cells(lastDayOfMonth + 3, j) = Round(Application.WorksheetFunction.Max(.Range(.Cells(2, j), .Cells(lastDayOfMonth + 1, j))), 0)
+        Next j
+    End With
+End Sub
 
 
 Sub merge_files_step_1()
@@ -100,6 +101,7 @@ Sub merge_files_step_1()
 
 
             lastRowObj = .Cells(Rows.Count, 1).End(xlUp).Row
+            If lastRowObj = 1 Then GoTo nextFile
 
             dates = .Range(.Cells(2, findDate.Column), .Cells(lastRowObj, findDate.Column))
             ts = .Range(.Cells(2, findTS.Column), .Cells(lastRowObj, findTS.Column))
@@ -142,7 +144,7 @@ Sub merge_files_step_1()
         With newWs
             .Cells(1, 1) = "Дата"
             .Cells(1, 2) = "Госномер"
-            .Cells(1, 3) = "Госномер"
+            .Cells(1, 3) = "Госномер2"
             .Cells(1, 4) = "Плечо"
             .Cells(1, 5) = "Файл"
             .Cells(1, 6) = "Дубликаты"
@@ -153,7 +155,7 @@ Sub merge_files_step_1()
             .Cells(lastRowNewWs + 1, 4).Resize(UBound(steps), 1).Value = Application.Transpose(steps)
             .Cells(lastRowNewWs + 1, 5).Resize(UBound(fileName), 1).Value = Application.Transpose(fileName)
         End With
-
+nextFile:
         Erase dates
         Erase ts
         Erase fileName
@@ -225,7 +227,7 @@ Sub merge_files_step_2()
         .Cells(2, 1).Resize(UBound(dates), 1).Value = Application.Transpose(dates)
         .Cells(2, 6).Resize(UBound(forDublicates), 1).Value = Application.Transpose(forDublicates)
 
-        .Range(.Cells(1, 1), .Cells(lastRowNewWs, lastColumnNewWs)).RemoveDuplicates Columns:=6, tableHeader:=xlYes
+        .Range(.Cells(1, 1), .Cells(lastRowNewWs, lastColumnNewWs)).RemoveDuplicates Columns:=Array(6), Header:=xlYes
 
         Erase dates
         Erase ts
@@ -298,8 +300,8 @@ Sub merge_files_step_2()
     reportMonth = Month(newWsData(1, 1))
     lastDayOfMonth = Day(DateSerial(Year(Date), reportMonth + 1, 0))
 
-    createReport macroWb, onlyNEOReportWs, onlyNEOdata, reportMonth, lastDayOfMonth 'формируем листы
-    createReport macroWb, exceptNEOReportWs, exceptNEOdata, reportMonth, lastDayOfMonth
+    createReport macroWb, onlyNEOReportWs, "Отчет только НЭО", onlyNEOdata, reportMonth, lastDayOfMonth 'формируем листы
+    createReport macroWb, exceptNEOReportWs, "Отчет без НЭО", exceptNEOdata, reportMonth, lastDayOfMonth
 
     With Application
         .Calculation = xlCalculationAutomatic
