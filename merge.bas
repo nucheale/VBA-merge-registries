@@ -23,6 +23,47 @@ Function twoDimArrayToOneDim(oldArr)
     twoDimArrayToOneDim = newArr
 End Function
 
+Private Sub createReport(wb, sheetName, data, reportMonth, lastDayOfMonth) 'создание листа с отчетом
+        Set sheetName = wb.Sheets.Add(After:=wb.Sheets(wb.Sheets.Count))
+        With sheetName
+            .Cells(1, 1) = "Дата"
+            .Cells(1, 2) = "0"
+            .Cells(1, 3) = "1"
+            .Cells(1, 4) = "2"
+            .Cells(1, 5) = "0 и 1"
+            ' .cells(1, 7) = "Среднее количество за апрель:"
+            For i = 2 To lastDayOfMonth + 1
+                count0 = 0
+                count1 = 0
+                count2 = 0
+                For e = LBound(data) To UBound(data)
+                    If data(e, 1) = "" Then Exit For
+                    .Cells(i, 1) = DateSerial(Year(Date), reportMonth, i - 1)
+                    If data(e, 1) = .Cells(i, 1) Then
+                        Select Case True
+                            Case data(e, 4) = 0
+                                count0 = count0 + 1
+                            Case data(e, 4) = 1
+                                count1 = count1 + 1
+                            Case data(e, 4) = 2
+                                count2 = count2 + 1
+                        End Select
+                    End If
+                Next e
+                .Cells(i, 2) = count0
+                .Cells(i, 3) = count1
+                .Cells(i, 4) = count2
+                .Cells(i, 5) = count0 + count1
+            Next i
+            .Cells(lastDayOfMonth + 2, 1) = "Среднее"
+            .Cells(lastDayOfMonth + 3, 1) = "Максимальное"
+            For j = 2 To 5
+                .Cells(lastDayOfMonth + 2, j) = Round(Application.WorksheetFunction.Average(.Range(.Cells(2, j), .Cells(lastDayOfMonth + 1, j))), 0)
+                .Cells(lastDayOfMonth + 3, j) = Round(Application.WorksheetFunction.Max(.Range(.Cells(2, j), .Cells(lastDayOfMonth + 1, j))), 0)
+            Next j
+        End With
+    End Sub
+
 
 Sub merge_files_step_1()
 
@@ -129,6 +170,8 @@ Sub merge_files_step_1()
 
 End Sub
 
+' после первого шага нужно проставить правильные госномера, некоторых может не быть в справочнике и нужно искать добавлять, поэтому это руками
+' на втором шаге рядом с файлом макроса должна быть выгрузка справочника тс для проставления перевозчика
 
 Sub merge_files_step_2()
 
@@ -159,7 +202,9 @@ Sub merge_files_step_2()
         .Cells(2, 3).Resize(UBound(tsDict), 1).Value = Application.Transpose(tsDict)
     End With
 
-    With macroWb.Sheets(macroWb.Sheets.Count)
+    Set newWs = macroWb.Sheets(macroWb.Sheets.Count)
+
+    With newWs
         lastRowNewWs = .Cells(Rows.Count, 1).End(xlUp).Row
         lastColumnNewWs = .Cells(1, Columns.Count).End(xlToLeft).Column
                             
@@ -180,7 +225,7 @@ Sub merge_files_step_2()
         .Cells(2, 1).Resize(UBound(dates), 1).Value = Application.Transpose(dates)
         .Cells(2, 6).Resize(UBound(forDublicates), 1).Value = Application.Transpose(forDublicates)
 
-        .Range(.Cells(1, 1), .Cells(lastRowNewWs, lastColumnNewWs)).RemoveDuplicates Columns:=6, Header:=xlYes
+        .Range(.Cells(1, 1), .Cells(lastRowNewWs, lastColumnNewWs)).RemoveDuplicates Columns:=6, tableHeader:=xlYes
 
         Erase dates
         Erase ts
@@ -208,6 +253,54 @@ Sub merge_files_step_2()
 
     dictWb.Close SaveChanges:=True
 
+    Set onlyNEOWs = macroWb.Sheets.Add(After:=macroWb.Sheets(macroWb.Sheets.Count))
+    Set exceptNEOWs = macroWb.Sheets.Add(After:=macroWb.Sheets(macroWb.Sheets.Count))
+    currTime = Array(Hour(Now), Minute(Now), Second(Now))
+    onlyNEOWs.Name = "ВывозНЭО " & Date & "_" & currTime(0) & "_" & currTime(1) & "_" & currTime(2)
+    exceptNEOWs.Name = "ВывозБезНЭО " & Date & "_" & currTime(0) & "_" & currTime(1) & "_" & currTime(2)
+
+
+    Dim onlyNEOdata() As Variant
+    Dim exceptNEOdata() As Variant
+    counter1 = 1
+    counter2 = 1
+
+    With newWs
+        tableHeader = .Range(.Cells(1, 1), .Cells(1, lastColumnNewWs))
+        newWsData = .Range(.Cells(2, 1), .Cells(lastRowNewWs, lastColumnNewWs))
+        ReDim onlyNEOdata(1 To UBound(newWsData, 1), 1 To UBound(newWsData, 2))
+        ReDim exceptNEOdata(1 To UBound(newWsData, 1), 1 To UBound(newWsData, 2))
+        For i = LBound(newWsData, 1) To UBound(newWsData, 1)
+            If newWsData(i, 7) = "АО НЭО" Then
+                For j = LBound(newWsData, 2) To UBound(newWsData, 2)
+                    onlyNEOdata(counter1, j) = newWsData(i, j)
+                Next j
+                counter1 = counter1 + 1
+            Else
+                For j = LBound(newWsData, 2) To UBound(newWsData, 2)
+                    exceptNEOdata(counter2, j) = newWsData(i, j)
+                Next j
+                counter2 = counter2 + 1
+            End If
+        Next i
+    End With
+    
+    With onlyNEOWs
+        .Cells(1, 1).Resize(UBound(tableHeader, 1), UBound(tableHeader, 2)).Value = tableHeader
+        .Cells(2, 1).Resize(UBound(onlyNEOdata, 1), UBound(onlyNEOdata, 2)).Value = onlyNEOdata
+    End With
+    
+    With exceptNEOWs
+        .Cells(1, 1).Resize(UBound(tableHeader, 1), UBound(tableHeader, 2)).Value = tableHeader
+        .Cells(2, 1).Resize(UBound(exceptNEOdata, 1), UBound(exceptNEOdata, 2)).Value = exceptNEOdata
+    End With
+
+    reportMonth = Month(newWsData(1, 1))
+    lastDayOfMonth = Day(DateSerial(Year(Date), reportMonth + 1, 0))
+
+    createReport macroWb, onlyNEOReportWs, onlyNEOdata, reportMonth, lastDayOfMonth 'формируем листы
+    createReport macroWb, exceptNEOReportWs, exceptNEOdata, reportMonth, lastDayOfMonth
+
     With Application
         .Calculation = xlCalculationAutomatic
         .AskToUpdateLinks = True
@@ -215,6 +308,3 @@ Sub merge_files_step_2()
     End With
 
 End Sub
-
-
-'дальше разделение на листы
